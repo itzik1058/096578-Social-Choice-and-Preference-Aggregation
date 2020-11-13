@@ -1,5 +1,6 @@
 from typing import List, Set
 from itertools import product
+from pathlib import Path
 
 Candidate = str
 Profile = List[Candidate]
@@ -25,9 +26,6 @@ def condorcet_winner(candidates: Set[Candidate], profiles: List[Profile]):
 
 
 def plurality(candidates: Set[Candidate], profiles: List[Profile]):
-    condorcet = condorcet_winner(candidates, profiles)
-    if condorcet:
-        return condorcet
     score = {c: 0 for c in candidates}
     for profile in profiles:
         score[profile[0]] += 1
@@ -36,9 +34,6 @@ def plurality(candidates: Set[Candidate], profiles: List[Profile]):
 
 
 def borda(candidates: Set[Candidate], profiles: List[Profile]):
-    condorcet = condorcet_winner(candidates, profiles)
-    if condorcet:
-        return condorcet
     num_candidates = len(candidates)
     score = {c: 0 for c in candidates}
     for i, profile in enumerate(profiles):
@@ -48,9 +43,6 @@ def borda(candidates: Set[Candidate], profiles: List[Profile]):
 
 
 def nanson(candidates: Set[Candidate], profiles: List[Profile]):
-    condorcet = condorcet_winner(candidates, profiles)
-    if condorcet:
-        return condorcet
     num_candidates = len(candidates)
     score = {c: 0 for c in candidates}
     for i, profile in enumerate(profiles):
@@ -66,9 +58,6 @@ def nanson(candidates: Set[Candidate], profiles: List[Profile]):
 
 
 def stv(candidates: Set[Candidate], profiles: List[Profile]):
-    condorcet = condorcet_winner(candidates, profiles)
-    if condorcet:
-        return condorcet
     score = {c: 0 for c in candidates}
     vote_score = 1  # Initially every voter has one vote
     while len(score) > 1:
@@ -87,29 +76,55 @@ def stv(candidates: Set[Candidate], profiles: List[Profile]):
 
 
 def copeland(candidates: Set[Candidate], profiles: List[Profile]):
-    condorcet = condorcet_winner(candidates, profiles)
-    if condorcet:
-        return condorcet
     preferences = pairwise_preferences(candidates, profiles)
     score = {c: len([o for o in candidates if preferences[c, o]]) for c in candidates}
     max_score = max(score.values())
     return min(c for c in candidates if score[c] == max_score)  # Tie-breaking
 
 
+def parse_agh(strict_order: Path):
+    candidates: Set[Candidate] = set()
+    profiles: List[Profile] = []
+    with strict_order.open('r') as soc:
+        data = soc.read().splitlines()
+        num_candidates = int(data.pop(0))
+        candidate_id = {}
+        for i in range(num_candidates):
+            cid, cname = data.pop(0).split(',')
+            cid, cname = int(cid), cname.rstrip()
+            candidate_id[cid] = cname
+            candidates.add(cname)
+        num_voters, num_rankings, num_unique_rankings = map(int, data.pop(0).split(','))
+        for profile_data in data:
+            profile = list(map(int, profile_data.split(',')))
+            num_profiles = profile[0]
+            profile = [candidate_id[cid] for cid in profile[1:]]
+            for i in range(num_profiles):
+                profiles.append(profile)
+        print(f'Loaded {soc.name} with {num_candidates} candidates, {num_voters} voters, '
+              f'{num_rankings} rankings and {num_unique_rankings} unique rankings')
+    return candidates, profiles
+
+
 def main():
     voting_rules = [plurality, borda, nanson, stv, copeland]
-    candidates = {'A', 'B', 'C', 'D'}
-    profiles = [
-        ['A', 'C', 'B', 'D'],
-        ['D', 'A', 'B', 'C'],
-        ['D', 'A', 'C', 'B'],
-        ['C', 'A', 'D', 'B']
-    ]
-    condorcet = condorcet_winner(candidates, profiles)
-    print(f'Condercet winner: {condorcet}')
-    print(f'{"Rule":10}Winner')
-    for rule in voting_rules:
-        print(f'{rule.__name__:10}{rule(candidates, profiles)}')
+    agh = Path('../data/agh/')
+    for soc in ('ED-00009-00000001.soc', 'ED-00009-00000002.soc'):
+        candidates, profiles = parse_agh(agh / soc)
+        print(f'Results for {soc}')
+        while True:
+            condorcet = condorcet_winner(candidates, profiles)
+            if not condorcet:
+                break
+            candidates.discard(condorcet)
+            profiles = [[c for c in p if c != condorcet] for p in profiles]
+            print(f'Condorcet winner {condorcet} discarded from candidates')
+        if not candidates:
+            print('No candidates left')
+            continue
+        print(f'{"Rule":10}Winner')
+        for rule in voting_rules:
+            print(f'{rule.__name__:10}{rule(candidates, profiles)}')
 
 
 if __name__ == '__main__':
