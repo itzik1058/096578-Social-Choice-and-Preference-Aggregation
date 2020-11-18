@@ -52,18 +52,21 @@ def nanson(candidates: Set[Candidate], profiles: List[Profile]):
     mean_score = sum(score.values()) / len(score)
     max_score = max(score.values())
     if mean_score == max_score:
-        return score, min([c for c in candidates if score[c] == max_score])  # Tie-breaking
+        return [score], min([c for c in candidates if score[c] == max_score])  # Tie-breaking
     # Runoff with candidates that score above the mean score
     new_candidates = {c for c in candidates if score[c] > mean_score}
     new_profiles = [[c for c in p if c in new_candidates] for p in profiles]
     final_score, winner = nanson(new_candidates, new_profiles)
-    score.update(final_score)
-    return score, winner
+    all_scores = [{c: s for c, s in score.items()}]
+    all_scores.extend(final_score)
+    score.update(final_score[-1])
+    return all_scores, winner
 
 
 def stv(candidates: Set[Candidate], profiles: List[Profile]):
     vote_score = {c: 0 for c in candidates}
     vote_worth = 1  # Initially every voter has one vote
+    all_scores = []
     score = {}
     while len(vote_score) > 1:
         for profile in profiles:
@@ -78,8 +81,9 @@ def stv(candidates: Set[Candidate], profiles: List[Profile]):
         del vote_score[min_candidate]
         profiles = [[c for c in p if c != min_candidate] for p in profiles]
         vote_worth = min_score / len(vote_score)
+        all_scores.append({c: vote_score.get(c, 0) for c in candidates})
     score[next(iter(vote_score))] = len(score)
-    return score, min(vote_score)  # Tie-breaking
+    return all_scores, min(vote_score)  # Tie-breaking
 
 
 def copeland(candidates: Set[Candidate], profiles: List[Profile]):
@@ -90,9 +94,9 @@ def copeland(candidates: Set[Candidate], profiles: List[Profile]):
 
 
 def popularity(candidates: Set[Candidate], profiles: List[Profile]):
-    stv_score, _ = stv(candidates, profiles)
+    borda_score, _ = borda(candidates, profiles)
     copeland_score, _ = copeland(candidates, profiles)
-    score = {c: stv_score[c] * copeland_score[c] for c in candidates}
+    score = {c: borda_score[c] * copeland_score[c] for c in candidates}
     max_score = max(score.values())
     return score, min(c for c in candidates if score[c] == max_score)  # Tie-breaking
 
@@ -127,20 +131,18 @@ def main():
     for soc in ('ED-00009-00000001.soc', 'ED-00009-00000002.soc'):
         candidates, profiles = parse_agh(agh / soc)
         print(f'Results for {soc}')
-        while True:
-            condorcet = condorcet_winner(candidates, profiles)
-            if not condorcet:
-                break
+        condorcet = condorcet_winner(candidates, profiles)
+        if condorcet:
             candidates.discard(condorcet)
             profiles = [[c for c in p if c != condorcet] for p in profiles]
             print(f'Condorcet winner {condorcet} discarded from candidates')
         if not candidates:
             print('No candidates left')
             continue
-        print(f'{"Rule":10}{"Winner":10}Score')
+        print(f'{"Rule":12}{"Winner":10}Score')
         for rule in voting_rules:
             score, winner = rule(candidates, profiles)
-            print(f'{rule.__name__:10}{winner:10}{score}')
+            print(f'{rule.__name__:12}{winner:10}{score}')
 
 
 if __name__ == '__main__':
