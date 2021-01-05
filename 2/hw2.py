@@ -90,7 +90,6 @@ def plot_average_error(votes, true_ranking, n_iter=500):
         sample_size = np.arange(5, 90, 5)
         average_true_error = np.empty(shape=(3, sample_size.shape[0]))
         for i, size in enumerate(sample_size):
-            print(i, size)
             for _ in range(n_iter):
                 sample_votes = votes[np.random.choice(voters, size)]
                 for m, method in enumerate([proxy_truth_discovery, distance_truth_discovery, unweighted]):
@@ -112,8 +111,11 @@ def main():
     truth_ranking = truth_candidates[truth_ranking]
     # Keep only relevant votes
     truth_votes = votes[np.isin(votes, truth_ranking)].reshape(votes.shape[0], truth_ranking.shape[0])
-    # plot_proxy_truth_distance(truth_votes, truth_ranking)
-    plot_average_error(truth_votes, truth_ranking)
+    # Map remaining candidates into a smaller range
+    truth_ranking_mapped = np.digitize(truth_ranking.ravel(), np.sort(truth_ranking), right=True)
+    truth_votes_mapped = np.digitize(truth_votes.ravel(), np.sort(truth_ranking), right=True).reshape(truth_votes.shape)
+    # plot_proxy_truth_distance(truth_votes_mapped, truth_ranking_mapped)
+    plot_average_error(truth_votes_mapped, truth_ranking_mapped)
     results = []
     for method in (proxy_truth_discovery, distance_truth_discovery, unweighted):
         for rule in (weighted_borda, weighted_copeland):
